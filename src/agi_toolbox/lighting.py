@@ -3,8 +3,10 @@ import httpx
 
 COLOUR = {"type": "string", "pattern": "^(#[0-9a-fA-F]{6}|[A-Za-z0-9_-]{1,64})$"}
 LIGHTING_PARAMETERS = {
-    "type": "object", "additionalProperties": False,
+    "type": "object", "additionalProperties": False, "required": ["reason"],
     "properties": {
+        "reason": {"type": "string", "minLength": 1, "maxLength": 1000, "description": "Brief explanation of this choice for regular memory; not private reasoning."},
+        "meaning": {"type": "string", "maxLength": 1000, "description": "Optional meaning of a personal colour or blinking code that can be taught to the user."},
         "preset": {"type": "string", "description": "Optional saved effect name from lighting_catalog; other fields override it."},
         "start_color": COLOUR, "end_color": COLOUR,
         "transition_colors": {"type": "array", "items": COLOUR, "maxItems": 16},
@@ -17,7 +19,7 @@ LIGHTING_PARAMETERS = {
         "rhythm_pattern": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "number", "minimum": 0, "maximum": 1}},
         "rhythm_seconds": {"type": "number", "minimum": 1, "maximum": 60},
         "rainbow": {"type": "boolean"}, "loop": {"type": "boolean"},
-        "duration_seconds": {"type": "number", "minimum": 0.1, "maximum": 3600},
+        "duration_seconds": {"type": ["number", "null"], "minimum": 0.1, "maximum": 3600},
         "morse_text": {"type": "string", "maxLength": 120, "pattern": "^[A-Za-z0-9 ]*$"},
         "morse_unit_seconds": {"type": "number", "minimum": 0.25, "maximum": 2},
     },
@@ -30,10 +32,14 @@ LIGHTING_DESCRIPTION = (
     "steady keeps brightness constant while colours transition; stationary holds start_color. "
     "blink_fast is a 1-second cycle, blink_slow 4 seconds; other rhythms use rhythm_seconds. "
     "rainbow uses the hue wheel instead of the palette; loop repeats transitions. "
+    "preset=default restores the exact activity lighting. Supply a brief reason for every change. "
+    "Personal colour/blink codes may include meaning so you can explain them later. "
+    "Morse accepts up to 120 characters per effect; longer messages can be split. "
     "Morse needs ASCII morse_text; its timing uses morse_unit_seconds. "
     "pattern plays rhythm_pattern brightness multipliers at equal intervals over rhythm_seconds; "
     "each step must last at least 0.25 seconds. Use lighting_catalog to discover saved effects. "
-    "Effects replace the previous effect and expire after duration_seconds (default 60). "
+    "Effects replace the previous effect. duration_seconds is optional; omit or use null to keep it "
+    "until replaced or stopped, or choose a bounded duration. "
     "The result reports device connection status, not a guarantee of visible output."
 )
 
@@ -45,6 +51,7 @@ class LightingClient:
         self.url = console_url.rstrip('/') + '/api/lighting'
 
     def set_effect(self, **effect) -> dict:
+        _reason(effect.get("reason"))
         response = httpx.put(self.url, json=effect, timeout=5)
         response.raise_for_status()
         return response.json()
@@ -54,7 +61,8 @@ class LightingClient:
         response.raise_for_status()
         return response.json()
 
-    def stop(self) -> dict:
+    def stop(self, reason: str) -> dict:
+        _reason(reason)
         response = httpx.delete(self.url, timeout=5)
         response.raise_for_status()
         return response.json()
@@ -65,19 +73,32 @@ class LightingClient:
         response.raise_for_status()
         return response.json()
 
-    def save_preset(self, name: str, effect: dict, colors: dict | None = None) -> dict:
-        response = httpx.put(self.url + '/catalog', json={"name": name, "effect": effect, "colors": colors}, timeout=5)
+    def save_preset(self, name: str, effect: dict, reason: str, colors: dict | None = None, meaning: str = '') -> dict:
+        _reason(reason)
+        response = httpx.put(self.url + '/catalog', json={"name": name, "effect": effect, "colors": colors, "reason": reason, "meaning": meaning}, timeout=5)
         response.raise_for_status()
         return response.json()
 
 
 SAVE_LIGHTING_PARAMETERS = {
-    "type": "object", "additionalProperties": False, "required": ["name", "effect"],
+    "type": "object", "additionalProperties": False, "required": ["name", "effect", "reason"],
     "properties": {
+        "reason": LIGHTING_PARAMETERS["properties"]["reason"],
+        "meaning": LIGHTING_PARAMETERS["properties"]["meaning"],
         "name": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
-        "effect": {**LIGHTING_PARAMETERS, "properties": {k: v for k, v in LIGHTING_PARAMETERS["properties"].items() if k != "preset"}},
+        "effect": {**LIGHTING_PARAMETERS, "required": [], "properties": {k: v for k, v in LIGHTING_PARAMETERS["properties"].items() if k != "preset"}},
         "colors": {"type": "object", "maxProperties": 128,
                    "propertyNames": {"pattern": "^[A-Za-z0-9_-]{1,64}$"},
                    "additionalProperties": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"}},
     },
 }
+
+
+STOP_LIGHTING_PARAMETERS = {"type": "object", "additionalProperties": False,
+                            "required": ["reason"], "properties": {
+                                "reason": LIGHTING_PARAMETERS["properties"]["reason"]}}
+
+
+def _reason(reason):
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > 1000:
+        raise ValueError('Supply a brief reason (1–1000 characters) for lighting changes')
