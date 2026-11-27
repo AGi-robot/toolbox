@@ -1,4 +1,4 @@
-"""OpenRGB effect client. Console owns device access and effect validation."""
+"""Client and model tool contracts for the independent expressive lighting service."""
 import httpx
 
 COLOUR = {"type": "string", "pattern": "^(#[0-9a-fA-F]{6}|[A-Za-z0-9_-]{1,64})$"}
@@ -34,7 +34,7 @@ LIGHTING_DESCRIPTION = (
     "steady keeps brightness constant while colours transition; stationary holds start_color. "
     "blink_fast is a 1-second cycle, blink_slow 4 seconds; other rhythms use rhythm_seconds. "
     "rainbow uses the hue wheel instead of the palette; loop repeats transitions. "
-    "When asked to return to normal or restore the lights, use preset=default to restore the exact activity lighting. "
+    "When asked to return to normal or restore the lights, use preset=default to release expressive control and resume automatic activity lighting. "
     "When asked for a different look, choose an effect that fits the current context; it replaces the current one. "
     "Supply a brief reason for every change. "
     "Personal colour/blink codes may include meaning so you can explain them later. "
@@ -49,10 +49,10 @@ LIGHTING_DESCRIPTION = (
 
 
 class LightingClient:
-    def __init__(self, console_url: str = 'http://127.0.0.1:8853') -> None:
-        if not console_url.startswith(('http://', 'https://')):
-            raise ValueError('console_url must use HTTP(S)')
-        self.url = console_url.rstrip('/') + '/api/lighting'
+    def __init__(self, service_url: str = 'http://127.0.0.1:8854') -> None:
+        if not service_url.startswith(('http://', 'https://')):
+            raise ValueError('service_url must use HTTP(S)')
+        self.url = service_url.rstrip('/') + '/api/lighting'
 
     def set_effect(self, **effect) -> dict:
         _reason(effect.get("reason"))
