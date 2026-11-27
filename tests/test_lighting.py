@@ -6,7 +6,7 @@ from agi_toolbox.lighting import LightingClient
 
 class ClientTests(unittest.TestCase):
     def test_methods_and_effect_payload(self):
-        rgb = LightingClient('http://localhost:8853/')
+        rgb = LightingClient('http://localhost:8854/')
         with patch('agi_toolbox.lighting.httpx.put') as put:
             put.return_value = httpx.Response(200, json={'active': True}, request=httpx.Request('PUT', rgb.url))
             self.assertTrue(rgb.set_effect(brightness=.2, reason='A soft light')['active'])

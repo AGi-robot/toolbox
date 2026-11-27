@@ -1,4 +1,4 @@
-"""OpenRGB effect client. Console owns device access and effect validation."""
+"""Client and model tool contracts for the independent expressive lighting service."""
 import httpx
 
 COLOUR = {"type": "string", "pattern": "^(#[0-9a-fA-F]{6}|[A-Za-z0-9_-]{1,64})$"}
@@ -16,6 +16,8 @@ LIGHTING_PARAMETERS = {
                                "description": "Interpolated steps between colour stops: zero jumps, more is smoother."},
         "brightness": {"type": "number", "minimum": 0, "maximum": 1},
         "rhythm": {"type": "string", "enum": ["steady", "stationary", "blink", "blink_fast", "blink_slow", "heartbeat", "random", "morse", "pattern"]},
+        "speech_mode": {"type": "string", "enum": ["auto", "follow", "keep", "blend"],
+                        "description": "During response activity or future TTS playback: auto follows the activity envelope except for Morse; follow replaces brightness rhythm, keep preserves it, blend gently modulates it. Palette stays unchanged."},
         "rhythm_pattern": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "number", "minimum": 0, "maximum": 1}},
         "rhythm_seconds": {"type": "number", "minimum": 1, "maximum": 60},
         "rainbow": {"type": "boolean"}, "loop": {"type": "boolean"},
@@ -26,13 +28,18 @@ LIGHTING_PARAMETERS = {
 }
 LIGHTING_DESCRIPTION = (
     "Compose an expressive lighting effect using colours, gradients, rainbow and rhythms. "
-    "Choose whether and how to use it from the conversation; there are no prescribed moods or occasions. "
+    "Choose whether and which lighting effect to use from the current conversation, mood, history or timing. "
+    "Discover presets through lighting_catalog; their names and examples are suggestions, not fixed keyword triggers. "
+    "Decide freely when any effect fits, including out of the blue during an active chat. "
     "Colours use #RRGGBB or a name in lighting_catalog; brightness is 0–1. transition_seconds overrides transition_speed "
     "(fast=2, normal=5, slow=10 seconds per palette traversal). "
     "steady keeps brightness constant while colours transition; stationary holds start_color. "
     "blink_fast is a 1-second cycle, blink_slow 4 seconds; other rhythms use rhythm_seconds. "
+    "speech_mode selects auto, follow, keep or blend for the response heartbeat and future voice brightness; auto preserves Morse and otherwise follows the activity envelope. "
     "rainbow uses the hue wheel instead of the palette; loop repeats transitions. "
-    "preset=default restores the exact activity lighting. Supply a brief reason for every change. "
+    "When asked to return to normal or restore the lights, use preset=default to release expressive control and resume automatic activity lighting. "
+    "When asked for a different look, choose an effect that fits the current context; it replaces the current one. "
+    "Supply a brief reason for every change. "
     "Personal colour/blink codes may include meaning so you can explain them later. "
     "Morse accepts up to 120 characters per effect; longer messages can be split. "
     "Morse needs ASCII morse_text; its timing uses morse_unit_seconds. "
@@ -45,10 +52,10 @@ LIGHTING_DESCRIPTION = (
 
 
 class LightingClient:
-    def __init__(self, console_url: str = 'http://127.0.0.1:8853') -> None:
-        if not console_url.startswith(('http://', 'https://')):
-            raise ValueError('console_url must use HTTP(S)')
-        self.url = console_url.rstrip('/') + '/api/lighting'
+    def __init__(self, service_url: str = 'http://127.0.0.1:8854') -> None:
+        if not service_url.startswith(('http://', 'https://')):
+            raise ValueError('service_url must use HTTP(S)')
+        self.url = service_url.rstrip('/') + '/api/lighting'
 
     def set_effect(self, **effect) -> dict:
         _reason(effect.get("reason"))
@@ -67,6 +74,14 @@ class LightingClient:
         response.raise_for_status()
         return response.json()
 
+
+    def speech_event(self, *, stream_id: str, event: str, sequence: int, level: float = 0) -> dict:
+        """Future audio player calls this at playback time; it is not a model tool."""
+        response = httpx.put(self.url + '/speech', json={
+            'stream_id': stream_id, 'event': event, 'sequence': sequence, 'level': level,
+        }, timeout=5)
+        response.raise_for_status()
+        return response.json()
 
     def catalog(self) -> dict:
         response = httpx.get(self.url + '/catalog', timeout=5)

@@ -1,6 +1,6 @@
 # Toolbox
 
-Shared, transport-independent utilities for Grace. The first tool returns the current time in an IANA time zone.
+Shared, transport-independent utilities for AIVA. The first tool returns the current time in an IANA time zone.
 
 ```bash
 pip install -e .
@@ -13,18 +13,26 @@ Agentic may register this function as a tool. Specialized tools belong in their 
 
 ## Expressive lighting
 
-`agi_toolbox.lighting.LightingClient(console_url)` provides `set_effect(**effect)`, `status()` and `stop(reason=...)` for Console's `/api/lighting` API. The module exports `LIGHTING_PARAMETERS` and `LIGHTING_DESCRIPTION` for model tool registration. Install the matching Console effect API before enabling this tool.
+Toolbox implements AIVA's expressive lighting capability. Agentic and Interactive decide when to use it through the exported tool contracts; Console provides automatic activity lighting independently.
+
+Install the service extra and start it on the OpenRGB host:
+
+```bash
+pip install -e '.[lighting]'
+aiva-lighting
+```
+
+An OpenRGB SDK server must be running on `127.0.0.1:6742` (start OpenRGB with `--server`; Console can also start it). The capability does not require Console to run. The API listens on loopback port 8854 and owns its renderer and persistent Markdown catalogue. See [LIGHTING.md](LIGHTING.md) for configuration, device coordination, fields, and limitations.
 
 ```python
 from agi_toolbox.lighting import LightingClient
-lights = LightingClient('http://127.0.0.1:8853')
-lights.set_effect(reason='A warm-to-purple greeting', start_color='#FF8844', end_color='#6633FF',
-                  transition_speed='slow', intermediate_steps=64,
-                  brightness=0.4, rhythm='heartbeat', duration_seconds=60)
+lights = LightingClient('http://127.0.0.1:8854')
+lights.set_effect(preset='cyberpunk', reason='A colourful glow for our coding session')
+lights.set_effect(preset='default', reason='Return to normal activity lighting')
 ```
 
-The model can choose colours and effects freely. There are no occasion or mood rules. See [Console's lighting contract](https://github.com/Project-AGi/console/blob/dev/LIGHTING.md) for all fields, defaults and timing semantics. Hardware access stays in Console; Toolbox does not launch OpenRGB or load Grace's chat implementation.
+`catalog()` discovers presets; `save_preset(name, effect, reason, colors=None, meaning='')` validates and saves without playing. All model-facing changes require a reason, and personal signals can carry a meaning. Existing `~/.agi/lighting.md` files remain usable. Console no longer hosts `/api/lighting`; change client URLs from port 8853 to the independent service and use `AGI_LIGHTING_SERVICE_URL` in Interactive.
 
-`LightingClient.catalog()` reads editable named colours and effects. `save_preset(name, effect, reason, colors=None, meaning='')` adds or replaces them in Console's runtime Markdown catalogue without starting the effect. `set_effect(preset='my_effect', reason='Use my greeting')` plays one; other fields override saved values. `SAVE_LIGHTING_PARAMETERS` provides the save tool schema. Custom rhythms can be expressed as `rhythm='pattern'` plus `rhythm_pattern` brightness multipliers, without modifying code.
+A future TTS player can supply playback-volume events to `/api/lighting/speech`. The renderer applies the envelope to its own current palette; no RGB readback is required. Per-effect `speech_mode` controls whether speech follows, preserves, or blends with the chosen rhythm, with Morse preserved by default. This prepares the interface only; no TTS player is connected. See the [speech input contract](LIGHTING.md#prepared-speech-lighting-input).
 
-Model-facing lighting changes require a brief `reason`; `meaning` can describe an invented personal signal. `preset='default'` restores Console's original activity lighting. The catalogue response includes its exact `activity_defaults`. Omit `duration_seconds` or use null to keep an effect until explicitly replaced/stopped. Morse is limited to 120 characters per effect; status includes `morse_message_seconds`.
+When enabled through Interactive, streamed replies now report response activity in the background. The service temporarily applies an elevated heartbeat to the selected palette, then restores its rhythm. Voice playback events will supersede this heartbeat when a future TTS player is connected. Console's automatic activity renderer stays the lowest-priority fallback. See the [response and speech contract](LIGHTING.md#response-heartbeat-and-future-speech).
