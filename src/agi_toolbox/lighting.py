@@ -26,8 +26,8 @@ LIGHTING_PARAMETERS = {
 }
 LIGHTING_DESCRIPTION = (
     "Compose an expressive lighting effect using colours, gradients, rainbow and rhythms. "
-    "Choose whether and which lighting effect to use from the current conversation, mood, history or timing; disco is one option among many. "
-    "Celebration, dancing and encouragement are examples for disco, not fixed keyword triggers or an exhaustive list of when to use lighting. "
+    "Choose whether and which lighting effect to use from the current conversation, mood, history or timing. "
+    "Discover presets through lighting_catalog; their names and examples are suggestions, not fixed keyword triggers. "
     "Decide freely when any effect fits, including out of the blue during an active chat. "
     "Colours use #RRGGBB or a name in lighting_catalog; brightness is 0–1. transition_seconds overrides transition_speed "
     "(fast=2, normal=5, slow=10 seconds per palette traversal). "
