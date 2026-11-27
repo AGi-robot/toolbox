@@ -26,13 +26,16 @@ LIGHTING_PARAMETERS = {
 }
 LIGHTING_DESCRIPTION = (
     "Compose an expressive lighting effect using colours, gradients, rainbow and rhythms. "
-    "Choose whether and how to use it from the conversation; there are no prescribed moods or occasions. "
+    "Choose whether and how to use it from the current conversation, mood, history or timing. "
+    "The disco preset is a looping rainbow heartbeat for celebrations, dancing or encouragement; "
+    "those are examples, not fixed keyword triggers. Decide freely when it fits, including out of the blue during an active chat. "
     "Colours use #RRGGBB or a name in lighting_catalog; brightness is 0–1. transition_seconds overrides transition_speed "
     "(fast=2, normal=5, slow=10 seconds per palette traversal). "
     "steady keeps brightness constant while colours transition; stationary holds start_color. "
     "blink_fast is a 1-second cycle, blink_slow 4 seconds; other rhythms use rhythm_seconds. "
     "rainbow uses the hue wheel instead of the palette; loop repeats transitions. "
-    "preset=default restores the exact activity lighting. Supply a brief reason for every change. "
+    "preset=default restores the exact activity lighting; another effect replaces the current one. "
+    "Supply a brief reason for every change. "
     "Personal colour/blink codes may include meaning so you can explain them later. "
     "Morse accepts up to 120 characters per effect; longer messages can be split. "
     "Morse needs ASCII morse_text; its timing uses morse_unit_seconds. "
