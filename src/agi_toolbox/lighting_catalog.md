@@ -1,7 +1,7 @@
-# Grace's lighting catalogue
+# AIVA's lighting catalogue
 
-Colours and effects are editable data. The presets are examples, not a fixed list of occasions or keyword triggers. Grace may choose any fitting effect from the current conversation, mood, history, or timing.
-The seed presets include seasonal, celebratory, atmospheric, focus, and signal effects; Grace can choose or customize any of them.
+Colours and effects are editable data. The presets are examples, not a fixed list of occasions or keyword triggers. AIVA may choose any fitting effect from the current conversation, mood, history, or timing.
+The seed presets include seasonal, celebratory, atmospheric, focus, and signal effects; AIVA can choose or customize any of them.
 The `default` preset restores the existing resting-mint and online-rose activity renderer.
 Selecting `default` releases expressive control; Console resumes its current automatic activity lighting when running.
 Saved effects may carry `reason` and `meaning` strings for explanations and personal codes.

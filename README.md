@@ -1,6 +1,6 @@
 # Toolbox
 
-Shared, transport-independent utilities for Grace. The first tool returns the current time in an IANA time zone.
+Shared, transport-independent utilities for AIVA. The first tool returns the current time in an IANA time zone.
 
 ```bash
 pip install -e .
@@ -13,13 +13,13 @@ Agentic may register this function as a tool. Specialized tools belong in their 
 
 ## Expressive lighting
 
-Toolbox implements Grace's expressive lighting capability. Agentic and Interactive decide when to use it through the exported tool contracts; Console provides automatic activity lighting independently.
+Toolbox implements AIVA's expressive lighting capability. Agentic and Interactive decide when to use it through the exported tool contracts; Console provides automatic activity lighting independently.
 
 Install the service extra and start it on the OpenRGB host:
 
 ```bash
 pip install -e '.[lighting]'
-grace-lighting
+aiva-lighting
 ```
 
 An OpenRGB SDK server must be running on `127.0.0.1:6742` (start OpenRGB with `--server`; Console can also start it). The capability does not require Console to run. The API listens on loopback port 8854 and owns its renderer and persistent Markdown catalogue. See [LIGHTING.md](LIGHTING.md) for configuration, device coordination, fields, and limitations.

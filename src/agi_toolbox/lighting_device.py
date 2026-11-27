@@ -45,7 +45,7 @@ class LightingDevice:
             if self._thread and self._thread.is_alive():
                 return
             self._stop.clear()
-            self._thread = threading.Thread(target=self._animate, name='grace-expressive-lighting', daemon=True)
+            self._thread = threading.Thread(target=self._animate, name='aiva-expressive-lighting', daemon=True)
             self._thread.start()
 
     def _claim(self):
@@ -84,7 +84,7 @@ class LightingDevice:
             from openrgb import OpenRGBClient
             self._client = OpenRGBClient(address=os.getenv('AGI_OPENRGB_HOST', '127.0.0.1'),
                                          port=int(os.getenv('AGI_OPENRGB_PORT', '6742')),
-                                         name='Grace expressive lighting', protocol_version=4)
+                                         name='AIVA expressive lighting', protocol_version=4)
             devices = self._client.get_devices_by_name(
                 os.getenv('AGI_OPENRGB_DEVICE', 'MSI Z790 GAMING PLUS WIFI'), exact=False)
             if not devices:

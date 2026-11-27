@@ -1,6 +1,6 @@
 # Expressive lighting
 
-Toolbox owns the expressive lighting renderer and its own OpenRGB SDK client. Grace can compose an effect through `PUT /api/lighting`, inspect it through `GET /api/lighting`, and stop it through `DELETE /api/lighting`. One effect controls the configured device as a whole. Per-LED spatial effects are not implemented.
+Toolbox owns the expressive lighting renderer and its own OpenRGB SDK client. AIVA can compose an effect through `PUT /api/lighting`, inspect it through `GET /api/lighting`, and stop it through `DELETE /api/lighting`. One effect controls the configured device as a whole. Per-LED spatial effects are not implemented.
 
 Effects replace each other and survive ordinary Console activity updates. Selected effects and runtime response/speech overlays release control when none remain; explicit stop/default cancels them. Service shutdown releases control. Model-selected effects have no fixed calendar, news or emotion triggers. The runtime response and speech overlays are described below; this API does not add a scheduler or news source.
 
@@ -36,9 +36,9 @@ Other compositions could use orange/purple colour stops, pink gradients, a low-b
 
 The response reports whether an effect is active and whether the SDK device is connected. Accepted software state does not prove physical LEDs changed. Disabled/unavailable OpenRGB returns 503 for new effects; invalid fields return 422. SDK write failures cancel the effect and release device ownership; a new effect request can reconnect. The service binds to loopback; remote models call it through the local tool host.
 
-## Connect Grace
+## Connect AIVA
 
-Install Toolbox with `pip install -e '.[lighting]'` and run `grace-lighting` on the OpenRGB host. The SDK server must already be running. Configure Interactive with:
+Install Toolbox with `pip install -e '.[lighting]'` and run `aiva-lighting` on the OpenRGB host. The SDK server must already be running. Configure Interactive with:
 
 ```bash
 export AGI_LIGHTING_SERVICE_URL=http://127.0.0.1:8854
@@ -60,9 +60,9 @@ Console can start the SDK server as a convenience but leaves it running on exit,
 
 The seed catalogue is [`lighting_catalog.md`](src/agi_toolbox/lighting_catalog.md). The editable runtime copy defaults to `~/.agi/lighting.md`; set `AGI_LIGHTING_CATALOG` to choose a different path. Until a runtime file exists, the seed is read. The first saved preset creates the runtime file. Restart is unnecessary: the next catalogue read or effect selection sees edits. An already playing effect keeps its original values until replaced.
 
-The file contains prose and exactly one fenced `json` block with `colors` and `effects`. Add colour names, palettes, brightness settings, transition speeds, Morse messages, and effects there. `PUT /api/lighting/catalog` accepts `name`, `effect`, and optional `colors`; it validates the result and atomically updates the file while preserving prose. `GET /api/lighting/catalog` reads it. Grace receives `lighting_catalog` and `save_lighting_preset` tools as well as the play/status/stop tools. Saving a preset does not start it. Use `{"preset":"effect_name"}` in a lighting request, optionally overriding fields.
+The file contains prose and exactly one fenced `json` block with `colors` and `effects`. Add colour names, palettes, brightness settings, transition speeds, Morse messages, and effects there. `PUT /api/lighting/catalog` accepts `name`, `effect`, and optional `colors`; it validates the result and atomically updates the file while preserving prose. `GET /api/lighting/catalog` reads it. AIVA receives `lighting_catalog` and `save_lighting_preset` tools as well as the play/status/stop tools. Saving a preset does not start it. Use `{"preset":"effect_name"}` in a lighting request, optionally overriding fields.
 
-All effect definitions live in the catalogue. Grace chooses among them or composes a new effect using the current conversation, mood, history, or timing. Presets are editable starting points, with no fixed occasion or keyword triggers. Asking for normal lighting selects `default`; asking for another look lets Grace choose a fitting replacement. Newly added built-in presets are available alongside existing runtime entries, with user-defined colors and effects taking precedence.
+All effect definitions live in the catalogue. AIVA chooses among them or composes a new effect using the current conversation, mood, history, or timing. Presets are editable starting points, with no fixed occasion or keyword triggers. Asking for normal lighting selects `default`; asking for another look lets AIVA choose a fitting replacement. Newly added built-in presets are available alongside existing runtime entries, with user-defined colors and effects taking precedence.
 
 For entirely new rhythms without code changes, use `rhythm: "pattern"` and `rhythm_pattern: [0, 1, 0.2, 0.7, 0, 0]`. These are successive brightness multipliers over `rhythm_seconds`, with at least 0.25 seconds per step and at most 64 steps. Software still implements timing, interpolation, validation and hardware access; Markdown supplies the chosen data. The catalogue allows up to 128 colours, 128 effects and 64 KiB. Invalid manual edits return an error rather than silently choosing a different effect.
 
@@ -72,9 +72,9 @@ The built-in `default` catalogue option yields to Console’s existing activity 
 
 Effects can carry `reason` and `meaning` strings (up to 1000 characters each). `reason` is a brief explanation for a decision. `meaning` describes a personal signal, such as “two pink pulses mean hello.” Both are retained in saved presets. Model-facing set/save/stop tools require a reason. Normal Interactive chat records the chosen arguments and result in regular Memory's conversation database immediately after each attempted action, including failed actions and actions followed by an incomplete reply. This records actions and their outcomes, not proof of a visible hardware change.
 
-Install the matching Memory event support as well as Toolbox and Interactive. Related/recent lighting events are recalled into subsequent chat context and available through `lighting_history`. Grace can explain past choices when asked, or mention them in her reply without being asked. The record is scoped to the active conversation and persists across restarts. Saving a catalogue definition alone does not add it to regular memory; Interactive records the model's save action. Standalone Agentic trials do not use Grace's conversation memory.
+Install the matching Memory event support as well as Toolbox and Interactive. Related/recent lighting events are recalled into subsequent chat context and available through `lighting_history`. AIVA can explain past choices when asked, or mention them in her reply without being asked. The record is scoped to the active conversation and persists across restarts. Saving a catalogue definition alone does not add it to regular memory; Interactive records the model's save action. Standalone Agentic trials do not use AIVA's conversation memory.
 
-A custom effect can continue until Grace replaces it or selects default: leave `duration_seconds` unspecified or null. She can alternatively choose a duration. Morse permits 120 characters per effect; longer text needs separate effects. Status reports `morse_message_seconds` so the caller can choose enough time for a full transmission. Blink codes and colour transitions can have any personal meaning she saves; no vocabulary of meanings is imposed. A scheduler is still needed for activity outside chat or other existing triggers.
+A custom effect can continue until AIVA replaces it or selects default: leave `duration_seconds` unspecified or null. She can alternatively choose a duration. Morse permits 120 characters per effect; longer text needs separate effects. Status reports `morse_message_seconds` so the caller can choose enough time for a full transmission. Blink codes and colour transitions can have any personal meaning she saves; no vocabulary of meanings is imposed. A scheduler is still needed for activity outside chat or other existing triggers.
 
 ## Response heartbeat and future speech
 
@@ -119,7 +119,7 @@ The service smooths volume levels with a 40 ms attack and 150 ms release. It ret
 | `keep` | Preserve the effect's original rhythm |
 | `blend` | Preserve the original rhythm and gently scale its brightness by 65–100% according to voice volume |
 
-Grace can save `speech_mode` in any normal preset or override it when selecting an effect. The original effect is not rewritten. On playback stop, its original rhythm becomes visible again on its continuously advancing timeline, unless an ongoing text response still supplies the heartbeat placeholder. If the player stops sending updates, speech control times out after one second and the response heartbeat or selected effect resumes. Calling the normal stop/default tool also cancels the current speech overlay; late levels from that utterance cannot reactivate it.
+AIVA can save `speech_mode` in any normal preset or override it when selecting an effect. The original effect is not rewritten. On playback stop, its original rhythm becomes visible again on its continuously advancing timeline, unless an ongoing text response still supplies the heartbeat placeholder. If the player stops sending updates, speech control times out after one second and the response heartbeat or selected effect resumes. Calling the normal stop/default tool also cancels the current speech overlay; late levels from that utterance cannot reactivate it.
 
 With no custom effect selected, speech uses the palette from `AGI_LIGHTING_SPEECH_PRESET` (default `double_pulse`, the existing rose preset). This fallback is resolved from the same catalogue once per new playback session; its duration is governed by the playback session, not its preset's duration. `default` cannot be used as a speech fallback because it releases hardware control rather than defining a palette. Without speech, response activity, or a selected effect, the capability releases its device lock so Console can render the automatic activity lights. If a custom effect expires while speech continues, the configured speech fallback takes over until playback ends.
 

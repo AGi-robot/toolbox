@@ -18,7 +18,7 @@ def test_catalog_saves_markdown_and_resolves_names(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         save_preset('invalid', {'brightness': 5})
     assert path.read_text() == before
-    path.write_text(before.replace("# Grace's lighting catalogue", '# My own notes'))
+    path.write_text(before.replace("# AIVA's lighting catalogue", '# My own notes'))
     save_preset('quiet', {'brightness': .1})
     assert path.read_text().startswith('# My own notes')
 

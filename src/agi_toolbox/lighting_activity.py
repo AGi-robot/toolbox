@@ -15,7 +15,7 @@ class ResponseLighting:
 
     def start(self):
         if self._thread is None and not self._stop.is_set():
-            self._thread = threading.Thread(target=self._run, name='grace-response-lighting', daemon=True)
+            self._thread = threading.Thread(target=self._run, name='aiva-response-lighting', daemon=True)
             self._thread.start()
 
     def close(self):

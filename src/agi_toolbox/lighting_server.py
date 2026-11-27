@@ -1,4 +1,4 @@
-"""Independent local lighting capability. Run with grace-lighting."""
+"""Independent local lighting capability. Run with aiva-lighting."""
 import argparse
 import asyncio
 from contextlib import asynccontextmanager
@@ -20,7 +20,7 @@ def create_app(device=None):
         finally:
             await asyncio.to_thread(rgb.close)
 
-    app = FastAPI(title='Grace lighting capability', lifespan=lifespan, docs_url=None, redoc_url=None)
+    app = FastAPI(title='AIVA lighting capability', lifespan=lifespan, docs_url=None, redoc_url=None)
 
     async def payload(request):
         try:
