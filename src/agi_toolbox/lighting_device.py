@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import fcntl
 import logging
+import math
 import os
 from pathlib import Path
 import threading
@@ -32,6 +33,12 @@ class LightingDevice:
         self._speech = SpeechEnvelope()
         self._speech_base = None
         self._speech_started = 0.0
+        # Reuse the bounded session/sequence tracker; response activity has no
+        # audio level and renews less frequently than playback samples.
+        self._response = SpeechEnvelope()
+        self._response.timeout_seconds = 3.0
+        self._response_base = None
+        self._response_started = 0.0
 
     def start(self):
         with self._lock:
@@ -120,6 +127,7 @@ class LightingDevice:
         with self._lock:
             self._effect = None
             self._speech.reset()
+            self._response.reset()
             self._release()
             return self.status()
 
@@ -132,7 +140,11 @@ class LightingDevice:
     def _render_color(self, effect, elapsed, now):
         level = self._speech.value(now)
         if not self._speech.active(now):
-            return effect.color_at(elapsed)
+            if not self._response.active(now):
+                return effect.color_at(elapsed)
+            phase = ((now - self._response_started) % 0.4) / 0.4
+            level = max(math.exp(-((phase - 0.15) / 0.07) ** 2),
+                        0.7 * math.exp(-((phase - 0.40) / 0.09) ** 2))
         policy = self._speech_policy(effect)
         if policy == 'keep':
             return effect.color_at(elapsed)
@@ -170,6 +182,34 @@ class LightingDevice:
                     raise RuntimeError(f'Could not apply speech lighting: {error}') from error
             return {'accepted': accepted, **self.status()}
 
+    def response_event(self, *, stream_id, event, sequence):
+        with self._lock:
+            if event not in ('start', 'keepalive', 'stop'):
+                raise ValueError('event must be start, keepalive or stop')
+            if self._thread is None or not self._thread.is_alive():
+                raise RuntimeError('Lighting renderer is not running')
+            if os.getenv('AGI_OPENRGB_ENABLED', 'true').strip().lower() not in {'1', 'true', 'yes', 'on'}:
+                raise RuntimeError('OpenRGB is disabled')
+            now = self._clock()
+            base = None
+            if event == 'start':
+                base = resolve_effect({'preset': os.getenv('AGI_LIGHTING_RESPONSE_PRESET', 'double_pulse')})
+                if base is None:
+                    raise ValueError('Response fallback must be a colour preset, not default')
+            accepted = self._response.update(stream_id=stream_id,
+                event='level' if event == 'keepalive' else event, sequence=sequence, now=now)
+            if accepted:
+                if event == 'start':
+                    self._response_base = base
+                    self._response_started = now
+                try:
+                    self._frame(now)
+                except Exception as error:
+                    self._error = str(error)
+                    self.clear_effect()
+                    raise RuntimeError(f'Could not apply response lighting: {error}') from error
+            return {'accepted': accepted, **self.status()}
+
     def status(self):
         with self._lock:
             now = self._clock()
@@ -178,11 +218,14 @@ class LightingDevice:
                          if effect and effect.duration_seconds is not None else None)
             level = self._speech.value(now)
             speaking = self._speech.active(now)
-            base = effect if effect is not None else self._speech_base
-            return {'active': bool((effect and (remaining is None or remaining > 0)) or speaking),
+            responding = self._response.active(now)
+            base = effect if effect is not None else self._speech_base if speaking else self._response_base
+            return {'active': bool((effect and (remaining is None or remaining > 0)) or speaking or responding),
                     'effect': {k: v for k, v in asdict(effect).items() if not k.startswith('_')} if effect else None,
                     'remaining_seconds': remaining, 'connected': self._device is not None,
                     'error': self._error,
+                    'response': {'active': responding, 'stream_id': self._response.stream_id},
+                    'modulation': 'speech' if speaking else 'response' if responding else 'preset' if effect else 'default',
                     'speech': {'active': speaking, 'stream_id': self._speech.stream_id,
                                'level': level, 'policy': self._speech_policy(base) if speaking and base else None},
                     'morse_message_seconds': len(effect._morse) * effect.morse_unit_seconds if effect and effect.rhythm == 'morse' else None}
@@ -192,11 +235,12 @@ class LightingDevice:
             if self._effect.duration_seconds is not None and now - self._started >= self._effect.duration_seconds:
                 self._effect = None
         speaking = self._speech.active(now)
-        if self._effect is None and not speaking:
+        responding = self._response.active(now)
+        if self._effect is None and not speaking and not responding:
             self._release()
             return
-        effect = self._effect if self._effect is not None else self._speech_base
-        elapsed = now - (self._started if self._effect is not None else self._speech_started)
+        effect = self._effect if self._effect is not None else self._speech_base if speaking else self._response_base
+        elapsed = now - (self._started if self._effect is not None else self._speech_started if speaking else self._response_started)
         self._claim()
         self._write(self._render_color(effect, elapsed, now))
         self._error = None

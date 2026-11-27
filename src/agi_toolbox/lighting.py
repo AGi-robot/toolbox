@@ -17,7 +17,7 @@ LIGHTING_PARAMETERS = {
         "brightness": {"type": "number", "minimum": 0, "maximum": 1},
         "rhythm": {"type": "string", "enum": ["steady", "stationary", "blink", "blink_fast", "blink_slow", "heartbeat", "random", "morse", "pattern"]},
         "speech_mode": {"type": "string", "enum": ["auto", "follow", "keep", "blend"],
-                        "description": "During future TTS playback: auto follows voice except for Morse; follow replaces brightness rhythm, keep preserves it, blend gently modulates it. Palette stays unchanged."},
+                        "description": "During response activity or future TTS playback: auto follows the activity envelope except for Morse; follow replaces brightness rhythm, keep preserves it, blend gently modulates it. Palette stays unchanged."},
         "rhythm_pattern": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "number", "minimum": 0, "maximum": 1}},
         "rhythm_seconds": {"type": "number", "minimum": 1, "maximum": 60},
         "rainbow": {"type": "boolean"}, "loop": {"type": "boolean"},
@@ -35,7 +35,7 @@ LIGHTING_DESCRIPTION = (
     "(fast=2, normal=5, slow=10 seconds per palette traversal). "
     "steady keeps brightness constant while colours transition; stationary holds start_color. "
     "blink_fast is a 1-second cycle, blink_slow 4 seconds; other rhythms use rhythm_seconds. "
-    "speech_mode selects auto, follow, keep or blend for future voice brightness; auto preserves Morse and otherwise follows speech. "
+    "speech_mode selects auto, follow, keep or blend for the response heartbeat and future voice brightness; auto preserves Morse and otherwise follows the activity envelope. "
     "rainbow uses the hue wheel instead of the palette; loop repeats transitions. "
     "When asked to return to normal or restore the lights, use preset=default to release expressive control and resume automatic activity lighting. "
     "When asked for a different look, choose an effect that fits the current context; it replaces the current one. "

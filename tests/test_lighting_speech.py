@@ -151,3 +151,91 @@ def test_busy_device_cannot_claim_speech_started(renderer, tmp_path):
             rgb.speech_event(stream_id='a', event='start', sequence=0, level=1)
     assert not rgb.status()['speech']['active']
     assert rgb._lease is None
+
+
+def test_response_heartbeat_uses_palette_and_voice_takes_priority(renderer):
+    rgb, clock = renderer
+    effect = LightingEffect(start_color='#2288FF', rhythm='stationary', brightness=1)
+    rgb.set_effect(effect)
+    rgb.response_event(stream_id='reply', event='start', sequence=0)
+    clock[0] = 10.06  # peak of the 0.4 second response heartbeat
+    rgb._tick()
+    peak = rgb._write.call_args.args[0]
+    clock[0] = 10.12
+    rgb._tick()
+    assert rgb._write.call_args.args[0][2] < peak[2]
+    assert peak[2] > peak[1] > peak[0]
+    assert rgb.status()['modulation'] == 'response'
+    rgb.speech_event(stream_id='audio', event='start', sequence=0, level=.4)
+    clock[0] = 10.22
+    rgb._tick()
+    voice = rgb._write.call_args.args[0]
+    assert rgb.status()['modulation'] == 'speech'
+    assert rgb.status()['response']['active']
+    rgb.speech_event(stream_id='audio', event='stop', sequence=1)
+    assert rgb.status()['modulation'] == 'response'
+    assert rgb._write.call_args.args[0] != voice
+    rgb.response_event(stream_id='reply', event='stop', sequence=1)
+    assert rgb._write.call_args.args[0] == effect.color_at(.22)
+    assert rgb._effect is effect
+
+
+def test_response_stop_does_not_interrupt_voice_playback(renderer):
+    rgb, _ = renderer
+    rgb.response_event(stream_id='reply', event='start', sequence=0)
+    rgb.speech_event(stream_id='audio', event='start', sequence=0, level=.5)
+    rgb.response_event(stream_id='reply', event='stop', sequence=1)
+    assert rgb.status()['modulation'] == 'speech'
+    assert rgb._lease is not None
+    rgb.speech_event(stream_id='audio', event='stop', sequence=1)
+    assert rgb._lease is None
+
+
+def test_response_without_scene_times_out_and_rejects_late_events(renderer):
+    rgb, clock = renderer
+    rgb.response_event(stream_id='reply', event='start', sequence=0)
+    assert rgb._lease is not None
+    clock[0] += 2
+    rgb.response_event(stream_id='reply', event='keepalive', sequence=2)
+    assert not rgb.response_event(stream_id='reply', event='stop', sequence=1)['accepted']
+    clock[0] += 3.01
+    rgb._tick()
+    assert rgb._lease is None
+    assert not rgb.status()['active']
+    assert not rgb.response_event(stream_id='reply', event='keepalive', sequence=3)['accepted']
+
+
+def test_default_suppresses_current_response_but_not_next_reply(renderer):
+    rgb, _ = renderer
+    rgb.response_event(stream_id='a', event='start', sequence=0)
+    rgb.clear_effect()
+    assert not rgb.response_event(stream_id='a', event='keepalive', sequence=1)['accepted']
+    assert rgb._lease is None
+    assert rgb.response_event(stream_id='b', event='start', sequence=0)['accepted']
+
+
+def test_response_respects_morse_and_explicit_keep(renderer):
+    rgb, clock = renderer
+    for effect in [LightingEffect(rhythm='morse', morse_text='E'),
+                   LightingEffect(rhythm='blink_fast', speech_mode='keep')]:
+        rgb.set_effect(effect)
+        rgb.response_event(stream_id='reply-' + effect.rhythm, event='start', sequence=0)
+        clock[0] += .3
+        rgb._tick()
+        assert rgb._write.call_args.args[0] == effect.color_at(.3)
+        rgb.clear_effect()
+
+
+def test_response_api_validation_and_errors(renderer):
+    rgb, _ = renderer
+    client = TestClient(create_app(rgb))
+    endpoint = '/api/lighting/response'
+    start = {'stream_id': 'reply', 'event': 'start', 'sequence': 0}
+    assert client.put(endpoint, json=start).json()['accepted']
+    assert client.put(endpoint, json=start).json()['accepted'] is False
+    for data in [[], {}, {**start, 'event': 'unknown'}, {**start, 'sequence': True},
+                 {**start, 'level': 1}, {**start, 'stream_id': '../invalid'}]:
+        assert client.put(endpoint, json=data).status_code == 422
+    rgb._write.side_effect = OSError('SDK disconnected')
+    assert client.put(endpoint, json={**start, 'event': 'keepalive', 'sequence': 1}).status_code == 503
+    assert not rgb.status()['active']
