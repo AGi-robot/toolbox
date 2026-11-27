@@ -7,6 +7,7 @@ Selecting `default` releases expressive control; Console resumes its current aut
 Saved effects may carry `reason` and `meaning` strings for explanations and personal codes.
 The single JSON block is read whenever a lighting request arrives. Brightness is 0–1.
 `rhythm_pattern` contains successive brightness multipliers, equally spaced over `rhythm_seconds`.
+Optional `speech_mode` selects `auto` (follow future playback except Morse), `follow`, `keep`, or `blend`; speech modulation never rewrites the saved palette.
 
 ```json
 {

@@ -32,3 +32,5 @@ lights.set_effect(preset='default', reason='Return to normal activity lighting')
 ```
 
 `catalog()` discovers presets; `save_preset(name, effect, reason, colors=None, meaning='')` validates and saves without playing. All model-facing changes require a reason, and personal signals can carry a meaning. Existing `~/.agi/lighting.md` files remain usable. Console no longer hosts `/api/lighting`; change client URLs from port 8853 to the independent service and use `AGI_LIGHTING_SERVICE_URL` in Interactive.
+
+A future TTS player can supply playback-volume events to `/api/lighting/speech`. The renderer applies the envelope to its own current palette; no RGB readback is required. Per-effect `speech_mode` controls whether speech follows, preserves, or blends with the chosen rhythm, with Morse preserved by default. This prepares the interface only; no TTS player is connected. See the [speech input contract](LIGHTING.md#prepared-speech-lighting-input).

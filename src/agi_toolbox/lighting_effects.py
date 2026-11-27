@@ -57,6 +57,7 @@ class LightingEffect:
     intermediate_steps: int = 64
     brightness: float = 0.5
     rhythm: str = 'steady'
+    speech_mode: str = 'auto'
     rhythm_seconds: float = 2.0
     rhythm_pattern: list[float] = field(default_factory=list)
     rainbow: bool = False
@@ -76,6 +77,8 @@ class LightingEffect:
         palette = [_colour(self.start_color)] + [_colour(c) for c in self.transition_colors]
         if self.end_color is not None:
             palette.append(_colour(self.end_color))
+        if self.speech_mode not in ('auto', 'follow', 'keep', 'blend'):
+            raise ValueError('speech_mode must be auto, follow, keep or blend')
         if self.transition_speed not in SPEEDS or self.rhythm not in RHYTHMS:
             raise ValueError('Unknown transition_speed or rhythm')
         if type(self.intermediate_steps) is not int or not 0 <= self.intermediate_steps <= 256:
@@ -104,7 +107,7 @@ class LightingEffect:
         object.__setattr__(self, '_palette', tuple(palette))
         object.__setattr__(self, '_morse', morse_units(self.morse_text) if self.rhythm == 'morse' else ())
 
-    def color_at(self, elapsed: float) -> tuple[int, int, int]:
+    def color_at(self, elapsed: float, rhythm_amount: float | None = None) -> tuple[int, int, int]:
         period = self.transition_seconds or SPEEDS[self.transition_speed]
         position = max(0, elapsed) / period
         # Palette loops ping-pong for continuity; rainbow loops around the hue wheel.
@@ -145,4 +148,7 @@ class LightingEffect:
             amount = self.rhythm_pattern[min(int(phase * len(self.rhythm_pattern)), len(self.rhythm_pattern) - 1)]
         elif self.rhythm == 'morse':
             amount = self._morse[int(elapsed / self.morse_unit_seconds) % len(self._morse)]
+        if rhythm_amount is not None:
+            _number('rhythm_amount', rhythm_amount, 0, 1)
+            amount = rhythm_amount
         return tuple(round(c * self.brightness * amount) for c in source)

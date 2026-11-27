@@ -16,6 +16,8 @@ LIGHTING_PARAMETERS = {
                                "description": "Interpolated steps between colour stops: zero jumps, more is smoother."},
         "brightness": {"type": "number", "minimum": 0, "maximum": 1},
         "rhythm": {"type": "string", "enum": ["steady", "stationary", "blink", "blink_fast", "blink_slow", "heartbeat", "random", "morse", "pattern"]},
+        "speech_mode": {"type": "string", "enum": ["auto", "follow", "keep", "blend"],
+                        "description": "During future TTS playback: auto follows voice except for Morse; follow replaces brightness rhythm, keep preserves it, blend gently modulates it. Palette stays unchanged."},
         "rhythm_pattern": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "number", "minimum": 0, "maximum": 1}},
         "rhythm_seconds": {"type": "number", "minimum": 1, "maximum": 60},
         "rainbow": {"type": "boolean"}, "loop": {"type": "boolean"},
@@ -33,6 +35,7 @@ LIGHTING_DESCRIPTION = (
     "(fast=2, normal=5, slow=10 seconds per palette traversal). "
     "steady keeps brightness constant while colours transition; stationary holds start_color. "
     "blink_fast is a 1-second cycle, blink_slow 4 seconds; other rhythms use rhythm_seconds. "
+    "speech_mode selects auto, follow, keep or blend for future voice brightness; auto preserves Morse and otherwise follows speech. "
     "rainbow uses the hue wheel instead of the palette; loop repeats transitions. "
     "When asked to return to normal or restore the lights, use preset=default to release expressive control and resume automatic activity lighting. "
     "When asked for a different look, choose an effect that fits the current context; it replaces the current one. "
@@ -71,6 +74,14 @@ class LightingClient:
         response.raise_for_status()
         return response.json()
 
+
+    def speech_event(self, *, stream_id: str, event: str, sequence: int, level: float = 0) -> dict:
+        """Future audio player calls this at playback time; it is not a model tool."""
+        response = httpx.put(self.url + '/speech', json={
+            'stream_id': stream_id, 'event': event, 'sequence': sequence, 'level': level,
+        }, timeout=5)
+        response.raise_for_status()
+        return response.json()
 
     def catalog(self) -> dict:
         response = httpx.get(self.url + '/catalog', timeout=5)

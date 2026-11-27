@@ -10,12 +10,15 @@ import threading
 import time
 
 from .lighting_effects import LightingEffect
+from .lighting_speech import SpeechEnvelope
+from .lighting_catalog import resolve_effect
 
 LOG = logging.getLogger(__name__)
 
 
 class LightingDevice:
-    def __init__(self):
+    def __init__(self, *, clock=None):
+        self._clock = clock or time.monotonic
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._thread = None
@@ -26,6 +29,9 @@ class LightingDevice:
         self._started = 0.0
         self._last_color = None
         self._error = None
+        self._speech = SpeechEnvelope()
+        self._speech_base = None
+        self._speech_started = 0.0
 
     def start(self):
         with self._lock:
@@ -92,7 +98,7 @@ class LightingDevice:
             previous = self._effect
             self._claim()
             try:
-                self._write(effect.color_at(0))
+                self._write(self._render_color(effect, 0, self._clock()))
             except Exception as error:
                 self._error = str(error)
                 self._disconnect()
@@ -100,41 +106,105 @@ class LightingDevice:
                     self.clear_effect()
                 raise RuntimeError(f'Could not apply OpenRGB effect: {error}') from error
             self._effect = effect
-            self._started = time.monotonic()
+            self._started = self._clock()
             self._error = None
             return self.status()
+
+    def _release(self):
+        self._disconnect()
+        if self._lease is not None:
+            self._lease.close()  # close releases flock, including on process exit
+            self._lease = None
 
     def clear_effect(self):
         with self._lock:
             self._effect = None
-            self._disconnect()
-            if self._lease is not None:
-                self._lease.close()  # close releases flock, including on process exit
-                self._lease = None
+            self._speech.reset()
+            self._release()
             return self.status()
+
+    @staticmethod
+    def _speech_policy(effect):
+        if effect.speech_mode == 'auto':
+            return 'keep' if effect.rhythm == 'morse' else 'follow'
+        return effect.speech_mode
+
+    def _render_color(self, effect, elapsed, now):
+        level = self._speech.value(now)
+        if not self._speech.active(now):
+            return effect.color_at(elapsed)
+        policy = self._speech_policy(effect)
+        if policy == 'keep':
+            return effect.color_at(elapsed)
+        if policy == 'blend':
+            return tuple(round(c * (0.65 + 0.35 * level)) for c in effect.color_at(elapsed))
+        # Override only brightness modulation; palette, transitions and configured
+        # peak brightness still come from the selected effect, never hardware.
+        return effect.color_at(elapsed, rhythm_amount=0.08 + 0.92 * level)
+
+    def speech_event(self, *, stream_id, event, sequence, level=0.0):
+        with self._lock:
+            now = self._clock()
+            if self._thread is None or not self._thread.is_alive():
+                raise RuntimeError('Lighting renderer is not running')
+            if os.getenv('AGI_OPENRGB_ENABLED', 'true').strip().lower() not in {'1', 'true', 'yes', 'on'}:
+                raise RuntimeError('OpenRGB is disabled')
+            # Resolve once per new playback session, not once per volume sample.
+            base = None
+            if event == 'start':
+                name = os.getenv('AGI_LIGHTING_SPEECH_PRESET', 'double_pulse')
+                base = resolve_effect({'preset': name})
+                if base is None:
+                    raise ValueError('Speech fallback must be a colour preset, not default')
+            accepted = self._speech.update(stream_id=stream_id, event=event,
+                                           sequence=sequence, level=level, now=now)
+            if accepted:
+                if event == 'start':
+                    self._speech_base = base
+                    self._speech_started = now
+                try:
+                    self._frame(now)
+                except Exception as error:
+                    self._error = str(error)
+                    self.clear_effect()
+                    raise RuntimeError(f'Could not apply speech lighting: {error}') from error
+            return {'accepted': accepted, **self.status()}
 
     def status(self):
         with self._lock:
+            now = self._clock()
             effect = self._effect
-            remaining = (max(0, effect.duration_seconds - (time.monotonic() - self._started))
+            remaining = (max(0, effect.duration_seconds - (now - self._started))
                          if effect and effect.duration_seconds is not None else None)
-            return {'active': bool(effect and (remaining is None or remaining > 0)),
+            level = self._speech.value(now)
+            speaking = self._speech.active(now)
+            base = effect if effect is not None else self._speech_base
+            return {'active': bool((effect and (remaining is None or remaining > 0)) or speaking),
                     'effect': {k: v for k, v in asdict(effect).items() if not k.startswith('_')} if effect else None,
                     'remaining_seconds': remaining, 'connected': self._device is not None,
                     'error': self._error,
+                    'speech': {'active': speaking, 'stream_id': self._speech.stream_id,
+                               'level': level, 'policy': self._speech_policy(base) if speaking and base else None},
                     'morse_message_seconds': len(effect._morse) * effect.morse_unit_seconds if effect and effect.rhythm == 'morse' else None}
+
+    def _frame(self, now):
+        if self._effect is not None:
+            if self._effect.duration_seconds is not None and now - self._started >= self._effect.duration_seconds:
+                self._effect = None
+        speaking = self._speech.active(now)
+        if self._effect is None and not speaking:
+            self._release()
+            return
+        effect = self._effect if self._effect is not None else self._speech_base
+        elapsed = now - (self._started if self._effect is not None else self._speech_started)
+        self._claim()
+        self._write(self._render_color(effect, elapsed, now))
+        self._error = None
 
     def _tick(self):
         with self._lock:
-            if self._effect is None:
-                return
-            elapsed = time.monotonic() - self._started
-            if self._effect.duration_seconds is not None and elapsed >= self._effect.duration_seconds:
-                self.clear_effect()
-                return
             try:
-                self._write(self._effect.color_at(elapsed))
-                self._error = None
+                self._frame(self._clock())
             except Exception as error:
                 LOG.warning('Expressive lighting failed: %s', error)
                 self._error = str(error)

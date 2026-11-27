@@ -14,6 +14,7 @@ Effects replace each other and survive ordinary activity updates. Optional expir
 | `intermediate_steps` | 0–256 interpolated steps; default 64. Zero jumps between stops |
 | `brightness` | 0–1; default 0.5 |
 | `rhythm` | `steady`, `stationary`, `blink`, `blink_fast`, `blink_slow`, `heartbeat`, `random`, `morse`, `pattern` |
+| `speech_mode` | `auto` (default), `follow`, `keep`, or `blend`; controls brightness during playback without changing the palette |
 | `rhythm_seconds` | 1–60 seconds; default 2. Heartbeat has two pulses; random changes brightness once per cycle |
 | `rainbow` | Default false. Uses the hue wheel instead of palette interpolation |
 | `loop` | Default true. Palettes move forward and backward; rainbow wraps. False holds the final colour after one traversal |
@@ -74,3 +75,36 @@ Effects can carry `reason` and `meaning` strings (up to 1000 characters each). `
 Install the matching Memory event support as well as Toolbox and Interactive. Related/recent lighting events are recalled into subsequent chat context and available through `lighting_history`. Grace can explain past choices when asked, or mention them in her reply without being asked. The record is scoped to the active conversation and persists across restarts. Saving a catalogue definition alone does not add it to regular memory; Interactive records the model's save action. Standalone Agentic trials do not use Grace's conversation memory.
 
 A custom effect can continue until Grace replaces it or selects default: leave `duration_seconds` unspecified or null. She can alternatively choose a duration. Morse permits 120 characters per effect; longer text needs separate effects. Status reports `morse_message_seconds` so the caller can choose enough time for a full transmission. Blink codes and colour transitions can have any personal meaning she saves; no vocabulary of meanings is imposed. A scheduler is still needed for activity outside chat or other existing triggers.
+
+## Prepared speech lighting input
+
+TTS is not implemented here. The future audio player sends a normalized playback-volume envelope to `PUT /api/lighting/speech`; it never reads the physical RGB colour or edits a preset's palette. Send samples when audio is actually played, rather than when text or an audio file is generated. Compute RMS/peak levels over short PCM windows in the playback component, normalize them to 0–1, and send approximately 20 updates per second from a worker so HTTP cannot block audio playback. Raw audio does not pass through this API, and the model does not generate these events.
+
+Each utterance gets a new `stream_id` of 1–64 letters, digits, underscores or hyphens. Send `event: "start"` with `sequence: 0`, then `event: "level"` with increasing integer sequences, and `event: "stop"` when playback completes or is cancelled. Levels must be finite numbers from 0 to 1; zero means a silent portion of active playback. Sequence values must be integers from 0 to 2^53−1. A stop may omit the level. Delayed, duplicate, or wrong-session events return `accepted: false`; the renderer remembers the most recent 32 ended session IDs. Use a single playback-event producer. A new session supersedes the previous one.
+
+```json
+{"stream_id": "utterance-42", "event": "start", "sequence": 0, "level": 0.0}
+```
+
+```json
+{"stream_id": "utterance-42", "event": "level", "sequence": 1, "level": 0.72}
+```
+
+```json
+{"stream_id": "utterance-42", "event": "stop", "sequence": 2}
+```
+
+The service smooths volume levels with a 40 ms attack and 150 ms release. It retains the selected effect's palette, colour transitions, and peak brightness:
+
+| `speech_mode` | During active playback |
+|---|---|
+| `auto` | Follow the voice, except Morse keeps its timing |
+| `follow` | Replace only brightness rhythm with the smoothed volume envelope (8–100% of configured peak brightness) |
+| `keep` | Preserve the effect's original rhythm |
+| `blend` | Preserve the original rhythm and gently scale its brightness by 65–100% according to voice volume |
+
+Grace can save `speech_mode` in any normal preset or override it when selecting an effect. The original effect is not rewritten. On playback stop, its original rhythm becomes visible again on its continuously advancing timeline. If the player stops sending updates, speech control times out after one second and the selected effect resumes. Calling the normal stop/default tool also cancels the current speech overlay; late levels from that utterance cannot reactivate it.
+
+With no custom effect selected, speech uses the palette from `AGI_LIGHTING_SPEECH_PRESET` (default `double_pulse`, the existing rose preset). This fallback is resolved from the same catalogue once per new playback session; its duration is governed by the playback session, not its preset's duration. `default` cannot be used as a speech fallback because it releases hardware control rather than defining a palette. Without speech or a selected effect, the capability releases its device lock so Console can render the automatic activity lights. If a custom effect expires while speech continues, the configured speech fallback takes over until playback ends.
+
+`LightingClient.speech_event(...)` is available to a future host adapter; it is deliberately absent from the model tool list. Hosts sending frequent updates can use a persistent HTTP connection to the same endpoint. Status includes a `speech` object with the current stream, smoothed level, effective policy, and active flag. No live microphone, TTS engine, or audio device is opened by this feature; no lighting control is claimed until a custom effect or accepted speech-start event arrives.

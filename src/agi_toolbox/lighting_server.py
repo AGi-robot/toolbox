@@ -45,6 +45,16 @@ def create_app(device=None):
         except RuntimeError as error:
             raise HTTPException(503, str(error)) from None
 
+    @app.put('/api/lighting/speech')
+    async def speech(request: Request):
+        value = await payload(request)
+        try:
+            return await asyncio.to_thread(rgb.speech_event, **value)
+        except (ValueError, TypeError, OSError) as error:
+            raise HTTPException(422, str(error)) from None
+        except RuntimeError as error:
+            raise HTTPException(503, str(error)) from None
+
     @app.get('/api/lighting')
     async def status():
         return await asyncio.to_thread(rgb.status)
